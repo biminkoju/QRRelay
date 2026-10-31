@@ -1,6 +1,7 @@
 import { TransferSession, type TransferEvent, type TransferResult } from '../transfer/session';
 import { sourceFromBytes } from '../transfer/source';
 import { IndexedDbReceiverStorage } from '../transfer/indexedDbStorage';
+import { createZip, type ZipEntry } from '../transfer/zip';
 import { sha256HexChunked } from '../transfer/sha256';
 import type { ValidatedFrame } from '../protocol/frame';
 import { APP_VERSION, BUILD_ID, SUPPORTED_PROTOCOL_VERSIONS } from '../version';
@@ -150,10 +151,28 @@ export class TransferController {
     this.options.onFrame(null);
   }
 
-  /** Sender role: read the chosen file and start the exchange. */
-  async send(file: File): Promise<void> {
+  /**
+   * Sender role. One file is sent as itself; several are packaged into a
+   * single stored ZIP so the peer receives one verifiable blob rather than
+   * a sequence of transfers, each of which could fail on its own.
+   */
+  async send(files: readonly File[]): Promise<void> {
     if (this.active) return;
-    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (files.length === 0) throw new Error('choose at least one file');
+    let name: string;
+    let bytes: Uint8Array;
+    if (files.length === 1) {
+      const only = files[0]!;
+      name = only.name;
+      bytes = new Uint8Array(await only.arrayBuffer());
+    } else {
+      const entries: ZipEntry[] = [];
+      for (const file of files) {
+        entries.push({ name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) });
+      }
+      name = 'qrrelay-files.zip';
+      bytes = createZip(entries);
+    }
     // Chunked so a large file does not freeze the tab while it is hashed.
     const sha = await sha256HexChunked(bytes, {
       onProgress: (fraction) => {
@@ -165,10 +184,10 @@ export class TransferController {
     this.sessionId = shared;
     this.view = {
       phase: 'sending',
-      message: 'Starting transfer of ' + file.name,
+      message: 'Starting transfer of ' + name,
       sentChunks: 0,
       totalChunks: Math.ceil(bytes.length / this.chunkSize()),
-      fileName: file.name,
+      fileName: name,
       receivedBytes: null,
       receivedSha256: null,
       outcome: null,
@@ -178,7 +197,7 @@ export class TransferController {
       sessionId: this.sessionId,
       config: this.config(),
       local: this.local(),
-      source: sourceFromBytes(file.name, bytes, sha),
+      source: sourceFromBytes(name, bytes, sha),
     });
     this.session.start();
     this.startTimer();

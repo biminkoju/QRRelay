@@ -34,7 +34,8 @@ export function createTransferPanel(options: TransferPanelOptions): TransferPane
 
   const fileInput = el('input', 'transfer-file');
   fileInput.type = 'file';
-  fileInput.setAttribute('aria-label', 'File to send');
+  fileInput.multiple = true;
+  fileInput.setAttribute('aria-label', 'Files to send');
 
   const sendBtn = button('Send file', () => void sendFile(), 'btn');
   const receiveBtn = button('Receive file', () => receive(), 'btn btn-secondary');
@@ -90,10 +91,13 @@ export function createTransferPanel(options: TransferPanelOptions): TransferPane
   }
 
   async function sendFile(): Promise<void> {
-    const file = fileInput.files?.[0];
-    if (!file) { setText(status, 'Choose a file first.'); return; }
+    const files = Array.from(fileInput.files ?? []);
+    if (files.length === 0) {
+      setText(status, 'Choose one or more files first.');
+      return;
+    }
     try {
-      await controller.send(file);
+      await controller.send(files);
     } catch (error) {
       setText(status, error instanceof Error ? error.message : String(error));
     }
