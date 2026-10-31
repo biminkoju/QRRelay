@@ -10,6 +10,8 @@ import type { ValidatedFrame } from '../protocol/frame';
  */
 export interface TransferPanelOptions {
   chunkSize(): number | null;
+  /** Shared with the peer; both machines must use the same value. */
+  sessionId(): string | null;
   onFrame(frameText: string | null): void;
 }
 
@@ -48,6 +50,7 @@ export function createTransferPanel(options: TransferPanelOptions): TransferPane
 
   const controller = new TransferController({
     chunkSize: () => options.chunkSize(),
+    sessionId: () => options.sessionId(),
     onFrame: (text) => options.onFrame(text),
     onChange: (next) => {
       view = next;
@@ -67,7 +70,8 @@ export function createTransferPanel(options: TransferPanelOptions): TransferPane
     }
 
     const active = next.phase === 'sending' || next.phase === 'receiving';
-    const calibrated = options.chunkSize() !== null;
+    const calibrated =
+      options.chunkSize() !== null && options.sessionId() !== null;
     sendBtn.disabled = !calibrated || active;
     receiveBtn.disabled = !calibrated || active;
     fileInput.disabled = !calibrated || active;

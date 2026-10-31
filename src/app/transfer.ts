@@ -2,7 +2,6 @@ import { TransferSession, type TransferEvent, type TransferResult } from '../tra
 import { sourceFromBytes } from '../transfer/source';
 import { sha256Hex } from '../transfer/hash';
 import type { ValidatedFrame } from '../protocol/frame';
-import { newSessionId } from '../protocol/session';
 import { APP_VERSION, BUILD_ID, SUPPORTED_PROTOCOL_VERSIONS } from '../version';
 import { DEFAULT_CONFIG } from '../protocol/constants';
 
@@ -32,6 +31,13 @@ export interface TransferUiOptions {
   onFrame(frameText: string | null): void;
   /** Read on each use: calibration may finish after the controller exists. */
   chunkSize(): number | null;
+  /**
+   * The transfer session id, shared by both machines. Using the calibration
+   * id means both sides derive the same value independently, so it no
+   * longer matters which one presses their button first. A locally drawn
+   * random id would differ on each machine and no frame would ever match.
+   */
+  sessionId(): string | null;
 }
 
 const EMPTY_VIEW: TransferUiView = {
@@ -48,7 +54,7 @@ const EMPTY_VIEW: TransferUiView = {
 export class TransferController {
   private readonly options: TransferUiOptions;
   private session: TransferSession | null = null;
-  private sessionId = newSessionId();
+  private sessionId: string | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private view: TransferUiView = { ...EMPTY_VIEW };
 
@@ -70,6 +76,12 @@ export class TransferController {
       protocolVersions: [...SUPPORTED_PROTOCOL_VERSIONS],
       capabilities: ['reliable'],
     };
+  }
+
+  private requireSessionId(): string {
+    const id = this.options.sessionId();
+    if (id === null) throw new Error('link up with the peer before transferring');
+    return id;
   }
 
   private chunkSize(): number {
@@ -141,7 +153,8 @@ export class TransferController {
     if (this.active) return;
     const bytes = new Uint8Array(await file.arrayBuffer());
     const sha = await sha256Hex(bytes);
-    this.sessionId = newSessionId();
+    const shared = this.requireSessionId();
+    this.sessionId = shared;
     this.view = {
       phase: 'sending',
       message: 'Starting transfer of ' + file.name,
@@ -167,7 +180,8 @@ export class TransferController {
   /** Receiver role: wait for the peer to begin. */
   receive(): void {
     if (this.active) return;
-    this.sessionId = newSessionId();
+    const shared = this.requireSessionId();
+    this.sessionId = shared;
     this.view = {
       phase: 'receiving',
       message: 'Waiting for the peer to start',

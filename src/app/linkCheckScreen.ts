@@ -160,6 +160,10 @@ export function renderLinkCheckScreen(
   // is active its frames are what the other machine needs to see.
   const transferPanel = createTransferPanel({
     chunkSize: () => transferChunkSize,
+    // The calibration id is derived identically on both machines, so it
+    // is the one session id they already share. A locally drawn random
+    // id would differ per machine and no transfer frame would match.
+    sessionId: () => controller?.alignment.calId ?? null,
     onFrame: (text) => {
       transferFrame = text;
       // Redraw immediately: the peer is waiting on this frame.
