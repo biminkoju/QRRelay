@@ -58,10 +58,12 @@ export function renderLinkCheckScreen(container: HTMLElement, onBack: () => void
   const calibrateBtn = button('Run calibration', () => void calibrate(), 'btn btn-secondary');
   const simulateBtn = button('Simulate (no camera)', () => simulate(), 'btn btn-secondary');
   calibrateBtn.disabled = true;
+  const flipBtn = button('Switch to front camera', () => void flipCamera(), 'btn btn-secondary');
+  flipBtn.disabled = true;
   const deviceSelect = el('select', 'select');
   deviceSelect.setAttribute('aria-label', 'Camera device');
   deviceSelect.disabled = true;
-  controls.append(startBtn, simulateBtn, calibrateBtn, stopBtn, deviceSelect);
+  controls.append(startBtn, flipBtn, simulateBtn, calibrateBtn, stopBtn, deviceSelect);
 
   const details = el('dl', 'details');
   const iSeePeer = field('I can see the peer', 'no');
@@ -120,6 +122,7 @@ export function renderLinkCheckScreen(container: HTMLElement, onBack: () => void
   }
 
   let controller: LinkCheckController | null = null;
+  let facing: 'environment' | 'user' = 'environment';
   let lastBeacon: string | null = null;
 
   /**
@@ -216,6 +219,27 @@ export function renderLinkCheckScreen(container: HTMLElement, onBack: () => void
     renderDiagnostics(view);
   }
 
+  /**
+   * Phones default to the selfie camera, which is useless for scanning the
+   * other screen. The start call already prefers the rear camera; this gives
+   * an escape hatch when a browser ignores that preference.
+   */
+  async function flipCamera(): Promise<void> {
+    if (!controller) return;
+    flipBtn.disabled = true;
+    facing = facing === 'environment' ? 'user' : 'environment';
+    try {
+      await controller.switchCamera(undefined, preview, facing);
+      flipBtn.textContent = facing === 'environment' ? 'Switch to front camera' : 'Switch to back camera';
+      deviceSelect.replaceChildren(el('option', undefined, 'Default camera'));
+      setText(hint, 'Camera switched to ' + (facing === 'environment' ? 'the back' : 'the front') + ' camera.');
+    } catch (error) {
+      hint.textContent = error instanceof Error ? error.message : String(error);
+    } finally {
+      flipBtn.disabled = false;
+    }
+  }
+
   async function start(): Promise<void> {
     if (controller) return;
     startBtn.disabled = true;
@@ -223,8 +247,9 @@ export function renderLinkCheckScreen(container: HTMLElement, onBack: () => void
       onView: (view) => applyView(view),
     });
     try {
-      await controller.start(preview);
+      await controller.start(preview, facing);
       stopBtn.disabled = false;
+      flipBtn.disabled = false;
       const cams = await listCameras().catch(() => []);
       deviceSelect.replaceChildren(el('option', undefined, 'Default camera'));
       for (const cam of cams) {
@@ -301,6 +326,7 @@ export function renderLinkCheckScreen(container: HTMLElement, onBack: () => void
     controller = null;
     preview.srcObject = null;
     startBtn.disabled = false;
+    flipBtn.disabled = true;
     stopBtn.disabled = true;
     status.textContent = 'Stopped';
     status.dataset.kind = 'pending';

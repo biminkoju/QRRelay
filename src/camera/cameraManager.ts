@@ -53,10 +53,19 @@ export async function listCameras(): Promise<CameraDevice[]> {
     .map((d, i) => ({ deviceId: d.deviceId, label: d.label || 'Camera ' + (i + 1) }));
 }
 
+export type Facing = 'environment' | 'user';
+
 export interface StartOptions {
   deviceId?: string;
   width?: number;
   height?: number;
+  /**
+   * Which camera to prefer. Defaults to the rear camera because this app
+   * scans another screen; on phones the browser otherwise picks the
+   * selfie camera and the user sees their own face instead of the peer.
+   * `ideal` rather than `exact`, so a laptop with one camera still works.
+   */
+  facingMode?: Facing;
   /** Reuse a visible <video> element instead of a detached one. */
   video?: HTMLVideoElement;
 }
@@ -68,10 +77,14 @@ export async function startCamera(options: StartOptions = {}): Promise<CameraSes
   video.playsInline = true;
   video.autoplay = true;
 
+  const facing = options.facingMode ?? 'environment';
   const constraints: MediaStreamConstraints = {
     audio: false,
     video: {
       ...(options.deviceId ? { deviceId: { exact: options.deviceId } } : {}),
+      // Only apply facingMode when no explicit device was chosen: some
+      // browsers reject deviceId plus facingMode as over-constrained.
+      ...(options.deviceId ? {} : { facingMode: { ideal: facing } }),
       width: { ideal: options.width ?? 1280 },
       height: { ideal: options.height ?? 720 },
     },
@@ -84,6 +97,11 @@ export async function startCamera(options: StartOptions = {}): Promise<CameraSes
     const name = (error as DOMException).name;
     if (name === 'NotAllowedError' || name === 'SecurityError') {
       throw new CameraError('DENIED', 'Camera permission was denied. Grant it in the browser site settings and retry.');
+    }
+    if (name === 'OverconstrainedError' && options.deviceId) {
+      // The saved device id may be stale after the browser rotates it.
+      // Fall back to the rear camera rather than refusing to start.
+      return startCamera({ ...options, deviceId: undefined });
     }
     if (name === 'NotFoundError' || name === 'OverconstrainedError') {
       throw new CameraError('NO_DEVICE', 'No usable camera was found for these constraints.');

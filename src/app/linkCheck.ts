@@ -5,7 +5,7 @@ import { validateBeacon } from '../protocol/messageTypes';
 import { CalibrationRunner, type CalibrationDiagnostics, type CalibrationPhase } from '../protocol/calibrationRunner';
 import type { LinkProfile } from '../protocol/calibration';
 import { newSessionId } from '../protocol/session';
-import { startCamera, listCameras, cameraSupport, CameraError, type CameraSession } from '../camera/cameraManager';
+import { startCamera, listCameras, cameraSupport, CameraError, type CameraSession, type Facing } from '../camera/cameraManager';
 import { startScanner, type ScannerHandle } from '../camera/qrScanner';
 import { acquireWakeLock, type WakeLockHandle } from '../camera/wakeLock';
 import { decodeRatePerSecond, qualityLabel } from '../camera/frameStats';
@@ -129,11 +129,11 @@ export class LinkCheckController {
     return 'Re-establishing the link.';
   }
 
-  async start(video?: HTMLVideoElement): Promise<void> {
+  async start(video?: HTMLVideoElement, facingMode: Facing = 'environment'): Promise<void> {
     this.stopped = false;
     this.wakeLock = await acquireWakeLock();
     try {
-      this.camera = await startCamera(video ? { video } : {});
+      this.camera = await startCamera(video ? { video, facingMode } : { facingMode });
       this.cameraError = null;
     } catch (error) {
       this.cameraError = (error as CameraError).message;
@@ -147,9 +147,14 @@ export class LinkCheckController {
     this.emitView();
   }
 
-  async switchCamera(deviceId: string, video?: HTMLVideoElement): Promise<void> {
+  async switchCamera(deviceId: string | undefined, video?: HTMLVideoElement, facingMode?: Facing): Promise<void> {
     this.stopDevices();
-    this.camera = await startCamera(video ? { deviceId, video } : { deviceId });
+    const options = {
+      ...(deviceId ? { deviceId } : {}),
+      ...(facingMode && !deviceId ? { facingMode } : {}),
+      ...(video ? { video } : {}),
+    };
+    this.camera = await startCamera(options);
     this.scanner = startScanner(this.camera.video, {
       onDecode: (text) => void this.handleDecoded(text),
     });
