@@ -1,0 +1,162 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+body {
+  margin: 0;
+  background: Canvas;
+  color: CanvasText;
+}
+
+.sheet {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+  display: grid;
+  gap: 1.25rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.subtitle,
+.note {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.status {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid currentColor;
+  font-weight: 600;
+}
+
+.status[data-kind='ready']::before {
+  content: 'OK  ';
+}
+
+.status[data-kind='pending']::before {
+  content: '...  ';
+}
+
+.status[data-kind='unavailable']::before {
+  content: '!  ';
+}
+
+.details {
+  margin: 0;
+  display: grid;
+  gap: 0.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 12rem 1fr;
+  gap: 0.5rem;
+}
+
+dt {
+  font-weight: 600;
+}
+
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Link Check screen */
+.link-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1.25rem;
+}
+
+.pane {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+  border-radius: 0.75rem;
+  align-content: start;
+}
+
+.pane h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.qr-canvas {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  background: #ffffff;
+}
+
+.camera-host {
+  background: #000000;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  min-height: 12rem;
+}
+
+.camera-preview {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* The preview is not mirrored. The scanner always reads unmirrored frames. */
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.btn {
+  font: inherit;
+  padding: 0.5rem 0.9rem;
+  border-radius: 0.4rem;
+  border: 1px solid color-mix(in srgb, CanvasText 40%, transparent);
+  background: ButtonFace;
+  color: ButtonText;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btn-secondary {
+  background: transparent;
+}
+
+.select {
+  font: inherit;
+  padding: 0.45rem;
+  border-radius: 0.4rem;
+  max-width: 16rem;
+}
+
+.hint {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid currentColor;
+  background: color-mix(in srgb, CanvasText 6%, transparent);
+}
+
+.mono {
+  font-family: ui-monospace, monospace;
+}
+
+.small {
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
