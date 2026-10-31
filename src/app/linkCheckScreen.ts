@@ -83,6 +83,21 @@ export function renderLinkCheckScreen(container: HTMLElement, onBack: () => void
   const nonceLine = el('p', 'mono small', '');
 
   sheet.append(back, title, status, hint, layout, controls, details, nonceLine);
+
+  // Raw measurements. Deliberately unpolished: on the bench, a table of
+  // numbers is worth more than a friendly verdict.
+  const diagSection = el('section', 'pane');
+  diagSection.append(el('h2', undefined, 'Measurements'));
+  const diagTable = el('table', 'diag');
+  diagTable.append(el('caption', 'small', 'Probe ladder, largest payload first'));
+  const diagHead = el('tr');
+  for (const label of ['Bytes', 'Forward', 'Reverse']) diagHead.append(el('th', undefined, label));
+  const diagBody = el('tbody');
+  diagTable.append(diagHead, diagBody);
+  const diagSummary = el('p', 'mono small', 'No calibration run yet.');
+  diagSection.append(diagTable, diagSummary);
+
+  sheet.append(diagSection);
   container.append(sheet);
 
   const support = cameraSupport();
@@ -95,15 +110,54 @@ export function renderLinkCheckScreen(container: HTMLElement, onBack: () => void
   let controller: LinkCheckController | null = null;
   let lastBeacon: string | null = null;
 
-  function drawBeacon(frameText: string): void {
-    if (frameText.length === 0 || frameText === lastBeacon) return;
-    lastBeacon = frameText;
+  /**
+   * Sizes the canvas from the pane's own rendered width. A fixed pixel budget
+   * made the 1024-byte probe rungs physically tiny, which would have failed on
+   * camera for reasons unrelated to the link.
+   */
+  function displaySize(): number {
+    const width = displayPane.clientWidth;
+    const available = width > 0 ? width - 32 : 520;
+    return Math.max(320, Math.min(1400, available));
+  }
+
+  function drawBeacon(frameText: string, ecl: LinkCheckView['frameEcl']): void {
+    const size = displaySize();
+    const key = ecl + ':' + frameText + ':' + size;
+    if (frameText.length === 0 || key === lastBeacon) return;
+    lastBeacon = key;
     try {
-      drawQrToCanvas(canvas, encodeQr(frameText, 'Q'), { maxCssSize: 520 });
+      drawQrToCanvas(canvas, encodeQr(frameText, ecl), { maxCssSize: size });
     } catch (error) {
       status.textContent = 'Beacon could not be encoded: ' + (error as Error).message;
       status.dataset.kind = 'unavailable';
     }
+  }
+
+  function renderDiagnostics(view: LinkCheckView): void {
+    const diag = view.diagnostics;
+    diagBody.replaceChildren();
+    if (!diag) {
+      diagSummary.textContent = 'No calibration run yet.';
+      return;
+    }
+    for (const row of [...diag.ladder].reverse()) {
+      const tr = el('tr');
+      tr.append(el('td', undefined, String(row.bytes)));
+      tr.append(el('td', row.forward === null ? 'no answer' : row.forward ? 'ok' : 'failed'));
+      tr.append(el('td', row.reverse === null ? 'no answer' : row.reverse ? 'ok' : 'failed'));
+      diagBody.append(tr);
+    }
+    const rtts = diag.rttSamples.length > 0 ? diag.rttSamples.map((r) => r.toFixed(0)).join(', ') + ' ms' : 'none';
+    diagSummary.textContent =
+      'Role ' + diag.role +
+      ', EC ' + diag.ecl +
+      ', phase ' + diag.phase +
+      ' | confirmed forward ' + diag.forwardConfirmedBytes +
+      ' B, reverse ' + diag.reverseConfirmedBytes +
+      ' B | burst ' + diag.burstFramesSeen + '/' + diag.burstFrames +
+      ' | RTT ' + rtts +
+      ' | timeouts ' + diag.timeouts;
   }
 
   function applyView(view: LinkCheckView): void {
@@ -130,8 +184,9 @@ export function renderLinkCheckScreen(container: HTMLElement, onBack: () => void
     );
     setText(dd(rttField), view.profile && view.profile.rttMs !== null ? view.profile.rttMs.toFixed(0) + ' ms' : 'not measured');
     calibrateBtn.disabled = !view.canCalibrate;
-    drawBeacon(controller?.displayFrameText() ?? '');
+    drawBeacon(controller?.displayFrameText() ?? '', view.frameEcl);
     deviceSelect.disabled = !controller;
+    renderDiagnostics(view);
   }
 
   async function start(): Promise<void> {

@@ -78,6 +78,27 @@ it and is also pure (caller supplies `nowMs` and decoded frames).
 - Timeouts abandon a step rather than retrying forever; the profile then says
   so in `notes`.
 
+## Bench procedure
+
+The Link Check screen shows a raw measurements table under the beacon:
+
+- one row per probe rung, with forward and reverse marked `ok`, `failed` or
+  `no answer` (a timeout is not a decode failure);
+- confirmed bytes in each direction;
+- burst frames seen out of frames sent;
+- each RTT sample, not just the median;
+- a timeout count.
+
+The QR is sized from the pane's rendered width, up to 1400 CSS px, so a large
+probe is not hidden behind an undersized symbol. Calibration frames are drawn
+at the EC level the runner reports, so the `ecl` field in the payload matches
+what the camera actually saw.
+
+Record, in this order: both directional indicators, the calibration id on both
+sides, then the table after calibration. A `failed` rung with `ok` rungs above
+it means the symbol was too dense at that size; a `no answer` means the peer
+never scanned it at all.
+
 ## What is still missing
 
 - Choosing the EC level by measurement: the ladder always runs at `M`.

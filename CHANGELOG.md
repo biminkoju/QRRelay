@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Calibration diagnostics: a raw measurements table on the Link Check screen (per-rung pass/fail per direction, confirmed bytes, burst frames, RTT samples, timeout count), a `diagnostics` getter on the runner, and an EC level that matches between the probe payload and the rendered symbol. QR display now sizes itself from the pane width instead of a fixed 520 px.
+
 - GitHub Pages support: deploy workflow with artifact verification, .nojekyll, manifest.json instead of .webmanifest (Pages MIME issue), 192/512 PNG and Apple touch icons, and four browser tests that serve dist/ from a /qrrelay/ subpath. The single-file build now keeps exactly one data-URI icon after inlining, which the new icon links had broken.
 
 - Phase 4: calibration protocol frames (CAL_PROBE, CAL_PROBE_RESULT, CAL_RATE_FRAME, CAL_RATE_RESULT, CAL_PING, CAL_PONG), a pure probe ladder / rate burst / RTT layer, conservative LinkProfile derivation, a pure calibration runner with frame dwell and timeout handling, and calibration wired into the Link Check screen.

@@ -135,3 +135,42 @@ describe('calibration runner', () => {
     expect(leader.drainEvents()).toEqual([]);
   });
 });
+
+describe('calibration diagnostics', () => {
+  it('reports every ladder rung and both directions after a full exchange', () => {
+    const leader = new CalibrationRunner({ role: 'leader', calId: CAL_ID });
+    const follower = new CalibrationRunner({ role: 'follower', calId: CAL_ID });
+    runPair(leader, follower);
+
+    const diag = leader.diagnostics;
+    expect(diag.role).toBe('leader');
+    expect(diag.ecl).toBe('M');
+    expect(diag.ladder.map((row) => row.bytes)).toEqual([32, 64, 128, 256, 512, 1024]);
+    expect(diag.ladder.every((row) => row.forward === true)).toBe(true);
+    expect(diag.ladder.every((row) => row.reverse === true)).toBe(true);
+    expect(diag.forwardConfirmedBytes).toBe(1024);
+    expect(diag.reverseConfirmedBytes).toBe(1024);
+    expect(diag.timeouts).toBe(0);
+    expect(diag.rttSamples.length).toBeGreaterThan(0);
+  }, 20000);
+
+  it('marks unanswered rungs as no answer rather than failed', () => {
+    const leader = new CalibrationRunner({ role: 'leader', calId: CAL_ID, answerTimeoutMs: 1000 });
+    leader.start(0);
+    const diag = leader.diagnostics;
+    expect(diag.ladder.every((row) => row.forward === null)).toBe(true);
+    expect(diag.forwardConfirmedBytes).toBe(0);
+  });
+
+  it('counts timeouts', () => {
+    const leader = new CalibrationRunner({ role: 'leader', calId: CAL_ID, answerTimeoutMs: 1000 });
+    leader.start(0);
+    leader.tick(2000);
+    expect(leader.diagnostics.timeouts).toBe(1);
+  });
+
+  it('exposes the EC level the display must use', () => {
+    expect(new CalibrationRunner({ role: 'leader', calId: CAL_ID }).eclLevel).toBe('M');
+    expect(new CalibrationRunner({ role: 'leader', calId: CAL_ID, ecl: 'Q' }).eclLevel).toBe('Q');
+  });
+});

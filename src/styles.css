@@ -160,3 +160,27 @@ dd {
   font-size: 0.8rem;
   overflow-wrap: anywhere;
 }
+
+/* Calibration measurements table */
+.diag {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.diag caption {
+  text-align: left;
+  padding-bottom: 0.4rem;
+  opacity: 0.75;
+}
+
+.diag th,
+.diag td {
+  text-align: left;
+  padding: 0.2rem 0.5rem;
+  border-bottom: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+}
+
+.diag th {
+  font-weight: 600;
+}

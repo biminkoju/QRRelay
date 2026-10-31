@@ -2,7 +2,7 @@ import { applyPeerBeacon, CALIBRATION_SESSION_ID, initialState, localBeacon, typ
 import { decodeFrame, encodeFrame, FrameError } from '../protocol/frame';
 import { jsonPayload } from '../protocol/sender';
 import { validateBeacon } from '../protocol/messageTypes';
-import { CalibrationRunner, type CalibrationPhase } from '../protocol/calibrationRunner';
+import { CalibrationRunner, type CalibrationDiagnostics, type CalibrationPhase } from '../protocol/calibrationRunner';
 import type { LinkProfile } from '../protocol/calibration';
 import { newSessionId } from '../protocol/session';
 import { startCamera, listCameras, cameraSupport, CameraError, type CameraSession } from '../camera/cameraManager';
@@ -41,6 +41,10 @@ export interface LinkCheckView {
   calibration: CalibrationPhase;
   calibrationMessage: string;
   profile: LinkProfile | null;
+  /** Raw measurements, or null before calibration starts. */
+  diagnostics: CalibrationDiagnostics | null;
+  /** EC level the current display frame is encoded at. */
+  frameEcl: 'L' | 'M' | 'Q' | 'H';
 }
 
 export interface LinkCheckCallbacks {
@@ -111,6 +115,8 @@ export class LinkCheckController {
       calibration: this.calibration?.currentPhase ?? 'idle',
       calibrationMessage: this.calibrationMessage,
       profile: this.profile,
+      diagnostics: this.calibration?.diagnostics ?? null,
+      frameEcl: this.displayEcl(),
     });
   }
 
@@ -199,6 +205,18 @@ export class LinkCheckController {
 
   /** Diagnostics sink; the screen renders views, so this is a no-op hook. */
   private emit(_kind: string, _message: string): void {}
+
+  /**
+   * EC level for the frame currently on screen. Calibration frames must be
+   * drawn at the level the runner reports, or the probe's own `ecl` field
+   * contradicts what the camera actually sees.
+   */
+  displayEcl(): 'L' | 'M' | 'Q' | 'H' {
+    if (this.calibration !== null && this.calibration.currentFrame() !== null) {
+      return this.calibration.eclLevel;
+    }
+    return 'Q';
+  }
 
   displayFrameText(): string {
     if (this.calibration !== null) {

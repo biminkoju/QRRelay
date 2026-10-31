@@ -50,6 +50,20 @@ export type CalibrationPhase =
   | 'pong-answer'
   | 'done';
 
+/** Everything measured, for the diagnostics panel. No interpretation. */
+export interface CalibrationDiagnostics {
+  role: CalibrationRole;
+  phase: CalibrationPhase;
+  ecl: CalibrationEcc;
+  ladder: { bytes: number; forward: boolean | null; reverse: boolean | null }[];
+  forwardConfirmedBytes: number;
+  reverseConfirmedBytes: number;
+  burstFramesSeen: number;
+  burstFrames: number;
+  rttSamples: number[];
+  timeouts: number;
+}
+
 export interface CalibrationEvent {
   kind: 'phase' | 'probe' | 'rate' | 'ping' | 'profile' | 'notice';
   message: string;
@@ -105,6 +119,7 @@ export class CalibrationRunner {
   private pingsSent = 0;
   private pendingPing: { id: number; t0: number } | null = null;
   private readonly dwellMs: number;
+  private timeouts = 0;
   /** A phase change that must wait for the current answer frame to be seen. */
   private deferred: (() => void) | null = null;
   private answerShownAt: number | null = null;
@@ -127,6 +142,38 @@ export class CalibrationRunner {
 
   get result(): LinkProfile | null {
     return this.profile;
+  }
+
+  /** EC level every calibration frame is encoded at. */
+  get eclLevel(): CalibrationEcc {
+    return this.ecl;
+  }
+
+  /** Raw observations. A null entry means that direction never answered. */
+  get diagnostics(): CalibrationDiagnostics {
+    const leader = this.role === 'leader';
+    const forward = leader ? this.forwardResults : this.forwardAnswered;
+    const reverse = leader ? this.reverseAnswered : this.reverseResults;
+    return {
+      role: this.role,
+      phase: this.phase,
+      ecl: this.ecl,
+      ladder: this.ladder.map((step) => {
+        const f = forward.find((r) => r.step === step.step);
+        const r = reverse.find((x) => x.step === step.step);
+        return {
+          bytes: step.bytes,
+          forward: f ? f.ok && f.observedBytes === step.bytes : null,
+          reverse: r ? r.ok && r.observedBytes === step.bytes : null,
+        };
+      }),
+      forwardConfirmedBytes: confirmedBytes(this.ladder, forward),
+      reverseConfirmedBytes: confirmedBytes(this.ladder, reverse),
+      burstFramesSeen: this.burstFramesSeen || (this.burstResult?.received ?? 0),
+      burstFrames: this.burst.frames,
+      rttSamples: [...this.rttSamples],
+      timeouts: this.timeouts,
+    };
   }
 
   currentFrame(): string | null {
@@ -411,6 +458,7 @@ export class CalibrationRunner {
 
     if (this.waitingSince === null) return;
     if (nowMs - this.waitingSince < this.timeoutMs) return;
+    this.timeouts++;
     this.emit('notice', 'No answer within ' + this.timeoutMs + ' ms during ' + this.phase);
     this.waitingSince = null;
 
