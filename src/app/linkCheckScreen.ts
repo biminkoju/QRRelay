@@ -23,24 +23,33 @@ export function renderLinkCheckScreen(container: HTMLElement, onBack: () => void
   status.setAttribute('role', 'status');
   status.setAttribute('aria-live', 'polite');
 
-  const layout = el('div', 'link-layout');
-  const displayPane = el('section', 'pane');
-  displayPane.append(el('h2', undefined, 'This screen (beacon)'));
+  // The beacon is the thing the other machine's camera has to resolve, so it
+  // gets the whole stage. Our own preview is only for aiming, so it becomes a
+  // small overlay in the corner instead of competing for half the screen.
+  const layout = el('div', 'beacon-stage');
+  const displayPane = el('section', 'beacon-pane');
   const canvas = el('canvas', 'qr-canvas');
   canvas.setAttribute('aria-label', 'Outgoing calibration beacon QR code');
   displayPane.append(canvas);
 
-  const cameraPane = el('section', 'pane');
-  cameraPane.append(el('h2', undefined, 'Peer screen (camera)'));
   const preview = el('video', 'camera-preview');
   preview.muted = true;
   preview.playsInline = true;
   preview.autoplay = true;
-  const cameraHost = el('div', 'camera-host');
-  cameraHost.append(preview);
-  cameraPane.append(cameraHost);
+  const cameraHost = el('div', 'camera-pip');
+  const cameraLabel = el('span', 'camera-pip-label', 'Peer screen');
+  // The overlay sits on top of the beacon. If it covers modules, the other
+  // camera fails for a reason that has nothing to do with the link, so it must
+  // be hideable in one click.
+  const pipToggle = button('Hide', () => togglePip(), 'camera-pip-toggle');
+  cameraHost.append(preview, cameraLabel, pipToggle);
 
-  layout.append(displayPane, cameraPane);
+  function togglePip(): void {
+    const hidden = cameraHost.classList.toggle('camera-pip-hidden');
+    pipToggle.textContent = hidden ? 'Show' : 'Hide';
+  }
+
+  layout.append(displayPane, cameraHost);
 
   const controls = el('div', 'controls');
   const startBtn = button('Start camera', () => void start());
@@ -119,9 +128,13 @@ export function renderLinkCheckScreen(container: HTMLElement, onBack: () => void
    * camera for reasons unrelated to the link.
    */
   function displaySize(): number {
-    const width = displayPane.clientWidth;
-    const available = width > 0 ? width - 32 : 520;
-    return Math.max(320, Math.min(1400, available));
+    const paneWidth = displayPane.clientWidth;
+    // Never taller than the viewport allows, or the symbol would scroll out of
+    // the other camera's view.
+    const paneHeight = globalThis.innerHeight ? globalThis.innerHeight - 220 : 0;
+    const available = paneWidth > 0 ? paneWidth - 24 : 520;
+    const byHeight = paneHeight > 0 ? paneHeight : available;
+    return Math.max(320, Math.min(1400, Math.min(available, byHeight)));
   }
 
   function drawBeacon(frameText: string, ecl: LinkCheckView['frameEcl']): void {

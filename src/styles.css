@@ -70,25 +70,23 @@ dd {
   overflow-wrap: anywhere;
 }
 
-/* Link Check screen */
-.link-layout {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
-  gap: 1.25rem;
-}
-
-.pane {
-  display: grid;
-  gap: 0.75rem;
-  padding: 1rem;
-  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+/* Link Check screen: beacon fills the stage, own camera is a corner overlay */
+.beacon-stage {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0.5rem;
   border-radius: 0.75rem;
-  align-content: start;
+  background: #ffffff;
+  overflow: hidden;
 }
 
-.pane h2 {
-  margin: 0;
-  font-size: 1rem;
+.beacon-pane {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
 }
 
 .qr-canvas {
@@ -96,20 +94,41 @@ dd {
   margin: 0 auto;
   max-width: 100%;
   background: #ffffff;
+  /* No smoothing: module edges must stay hard for the other camera. */
+  image-rendering: pixelated;
 }
 
-.camera-host {
+.camera-pip {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  width: clamp(7rem, 16vw, 12rem);
+  aspect-ratio: 4 / 3;
   background: #000000;
+  border: 2px solid #ffffff;
   border-radius: 0.5rem;
   overflow: hidden;
-  min-height: 12rem;
+  box-shadow: 0 2px 12px rgb(0 0 0 / 35%);
+  opacity: 0.9;
 }
 
 .camera-preview {
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: cover;
   /* The preview is not mirrored. The scanner always reads unmirrored frames. */
+}
+
+.camera-pip-label {
+  position: absolute;
+  top: 0.15rem;
+  left: 0.3rem;
+  font-size: 0.65rem;
+  color: #ffffff;
+  background: rgb(0 0 0 / 55%);
+  padding: 0 0.3rem;
+  border-radius: 0.2rem;
 }
 
 .controls {
@@ -189,3 +208,30 @@ dd {
 .verdict-ok { color: #157347; }
 .verdict-failed { color: #b02a37; }
 .verdict-none { opacity: 0.6; }
+
+.camera-pip-toggle {
+  position: absolute;
+  top: 0.15rem;
+  right: 0.2rem;
+  font: inherit;
+  font-size: 0.6rem;
+  padding: 0 0.25rem;
+  color: #ffffff;
+  background: rgb(0 0 0 / 60%);
+  border: 1px solid rgb(255 255 255 / 50%);
+  border-radius: 0.2rem;
+  cursor: pointer;
+}
+
+.camera-pip-hidden {
+  width: auto;
+  aspect-ratio: auto;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.camera-pip-hidden .camera-preview,
+.camera-pip-hidden .camera-pip-label {
+  display: none;
+}
