@@ -4,9 +4,9 @@
  */
 
 export class CameraError extends Error {
-  override name = 'CameraError';
-  readonly code: 'INSECURE' | 'UNSUPPORTED' | 'DENIED' | 'NO_DEVICE' | 'FAILED';
-  constructor(code: CameraError['code'], message: string) {
+  override name = "CameraError";
+  readonly code: "INSECURE" | "UNSUPPORTED" | "DENIED" | "NO_DEVICE" | "FAILED";
+  constructor(code: CameraError["code"], message: string) {
     super(message);
     this.code = code;
   }
@@ -21,6 +21,13 @@ export interface CameraSession {
   readonly stream: MediaStream;
   readonly video: HTMLVideoElement;
   readonly settings: MediaTrackSettings;
+  /**
+   * The facing actually in use, read from the live track rather than
+   * assumed from the request. Browsers are free to ignore `facingMode`, and
+   * a UI label based on the request would then describe a camera that is
+   * not the one open. Null when the platform does not report it.
+   */
+  readonly facing: Facing | null;
   stop(): void;
 }
 
@@ -35,12 +42,15 @@ function ensureSupported(): void {
   const support = cameraSupport();
   if (!support.secure) {
     throw new CameraError(
-      'INSECURE',
-      'Camera access needs a secure context. Open the installed PWA or serve the app from a localhost origin; a file:// page cannot open a camera in most browsers.',
+      "INSECURE",
+      "Camera access needs a secure context. Open the installed PWA or serve the app from a localhost origin; a file:// page cannot open a camera in most browsers.",
     );
   }
   if (!support.getUserMedia) {
-    throw new CameraError('UNSUPPORTED', 'This browser does not expose getUserMedia.');
+    throw new CameraError(
+      "UNSUPPORTED",
+      "This browser does not expose getUserMedia.",
+    );
   }
 }
 
@@ -49,11 +59,14 @@ export async function listCameras(): Promise<CameraDevice[]> {
   ensureSupported();
   const devices = await navigator.mediaDevices.enumerateDevices();
   return devices
-    .filter((d) => d.kind === 'videoinput')
-    .map((d, i) => ({ deviceId: d.deviceId, label: d.label || 'Camera ' + (i + 1) }));
+    .filter((d) => d.kind === "videoinput")
+    .map((d, i) => ({
+      deviceId: d.deviceId,
+      label: d.label || "Camera " + (i + 1),
+    }));
 }
 
-export type Facing = 'environment' | 'user';
+export type Facing = "environment" | "user";
 
 export interface StartOptions {
   deviceId?: string;
@@ -70,14 +83,16 @@ export interface StartOptions {
   video?: HTMLVideoElement;
 }
 
-export async function startCamera(options: StartOptions = {}): Promise<CameraSession> {
+export async function startCamera(
+  options: StartOptions = {},
+): Promise<CameraSession> {
   ensureSupported();
-  const video = options.video ?? document.createElement('video');
+  const video = options.video ?? document.createElement("video");
   video.muted = true;
   video.playsInline = true;
   video.autoplay = true;
 
-  const facing = options.facingMode ?? 'environment';
+  const facing = options.facingMode ?? "environment";
   const constraints: MediaStreamConstraints = {
     audio: false,
     video: {
@@ -95,28 +110,42 @@ export async function startCamera(options: StartOptions = {}): Promise<CameraSes
     stream = await navigator.mediaDevices.getUserMedia(constraints);
   } catch (error) {
     const name = (error as DOMException).name;
-    if (name === 'NotAllowedError' || name === 'SecurityError') {
-      throw new CameraError('DENIED', 'Camera permission was denied. Grant it in the browser site settings and retry.');
+    if (name === "NotAllowedError" || name === "SecurityError") {
+      throw new CameraError(
+        "DENIED",
+        "Camera permission was denied. Grant it in the browser site settings and retry.",
+      );
     }
-    if (name === 'OverconstrainedError' && options.deviceId) {
+    if (name === "OverconstrainedError" && options.deviceId) {
       // The saved device id may be stale after the browser rotates it.
       // Fall back to the rear camera rather than refusing to start.
       return startCamera({ ...options, deviceId: undefined });
     }
-    if (name === 'NotFoundError' || name === 'OverconstrainedError') {
-      throw new CameraError('NO_DEVICE', 'No usable camera was found for these constraints.');
+    if (name === "NotFoundError" || name === "OverconstrainedError") {
+      throw new CameraError(
+        "NO_DEVICE",
+        "No usable camera was found for these constraints.",
+      );
     }
-    throw new CameraError('FAILED', 'Camera could not be started: ' + (error as Error).message);
+    throw new CameraError(
+      "FAILED",
+      "Camera could not be started: " + (error as Error).message,
+    );
   }
 
   video.srcObject = stream;
   await video.play().catch(() => undefined);
   const track = stream.getVideoTracks()[0];
+  const settings = track ? track.getSettings() : {};
+  const reported = (settings as { facingMode?: string }).facingMode;
+  const actualFacing: Facing | null =
+    reported === "environment" || reported === "user" ? reported : null;
 
   return {
     stream,
     video,
-    settings: track ? track.getSettings() : {},
+    settings,
+    facing: actualFacing,
     stop() {
       for (const t of stream.getTracks()) t.stop();
       video.srcObject = null;

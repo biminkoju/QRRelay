@@ -1,17 +1,34 @@
-import { applyPeerBeacon, CALIBRATION_SESSION_ID, initialState, localBeacon, type AlignmentState } from '../protocol/alignment';
-import { decodeFrame, encodeFrame, FrameError } from '../protocol/frame';
-import { jsonPayload } from '../protocol/sender';
-import { validateBeacon } from '../protocol/messageTypes';
-import { CalibrationRunner, type CalibrationDiagnostics, type CalibrationPhase } from '../protocol/calibrationRunner';
-import type { LinkProfile } from '../protocol/calibration';
-import { newSessionId } from '../protocol/session';
-import { startCamera, listCameras, cameraSupport, CameraError, type CameraSession, type Facing } from '../camera/cameraManager';
-import { startScanner, type ScannerHandle } from '../camera/qrScanner';
-import { acquireWakeLock, type WakeLockHandle } from '../camera/wakeLock';
-import { decodeRatePerSecond, qualityLabel } from '../camera/frameStats';
-import { encodeQr } from '../qr/encode';
-import { drawQrToCanvas } from '../qr/canvas';
-import { APP_VERSION, BUILD_ID, SUPPORTED_PROTOCOL_VERSIONS } from '../version';
+import {
+  applyPeerBeacon,
+  CALIBRATION_SESSION_ID,
+  initialState,
+  localBeacon,
+  type AlignmentState,
+} from "../protocol/alignment";
+import { decodeFrame, encodeFrame, FrameError } from "../protocol/frame";
+import { jsonPayload } from "../protocol/sender";
+import { validateBeacon } from "../protocol/messageTypes";
+import {
+  CalibrationRunner,
+  type CalibrationDiagnostics,
+  type CalibrationPhase,
+} from "../protocol/calibrationRunner";
+import type { LinkProfile } from "../protocol/calibration";
+import { newSessionId } from "../protocol/session";
+import {
+  startCamera,
+  listCameras,
+  cameraSupport,
+  CameraError,
+  type CameraSession,
+  type Facing,
+} from "../camera/cameraManager";
+import { startScanner, type ScannerHandle } from "../camera/qrScanner";
+import { acquireWakeLock, type WakeLockHandle } from "../camera/wakeLock";
+import { decodeRatePerSecond, qualityLabel } from "../camera/frameStats";
+import { encodeQr } from "../qr/encode";
+import { drawQrToCanvas } from "../qr/canvas";
+import { APP_VERSION, BUILD_ID, SUPPORTED_PROTOCOL_VERSIONS } from "../version";
 
 export interface LinkCheckLocal {
   appVersion: string;
@@ -21,6 +38,8 @@ export interface LinkCheckLocal {
 }
 
 export interface LinkCheckView {
+  /** Facing actually in use, or null when the platform does not report it. */
+  cameraFacing: Facing | null;
   /** Human-readable phase for the status line. */
   phase: string;
   localNonce: string;
@@ -44,7 +63,7 @@ export interface LinkCheckView {
   /** Raw measurements, or null before calibration starts. */
   diagnostics: CalibrationDiagnostics | null;
   /** EC level the current display frame is encoded at. */
-  frameEcl: 'L' | 'M' | 'Q' | 'H';
+  frameEcl: "L" | "M" | "Q" | "H";
 }
 
 export interface LinkCheckCallbacks {
@@ -70,7 +89,7 @@ export class LinkCheckController {
   private stopped = false;
   private calibration: CalibrationRunner | null = null;
   private calibrationTimer: ReturnType<typeof setInterval> | null = null;
-  private calibrationMessage = 'Not started';
+  private calibrationMessage = "Not started";
   private profile: LinkProfile | null = null;
   private calibrationSeq = 0;
 
@@ -80,6 +99,11 @@ export class LinkCheckController {
     this.state = initialState(newSessionId());
   }
 
+  /** The live camera session, or null when stopped. */
+  get cameraSession(): CameraSession | null {
+    return this.camera;
+  }
+
   get alignment(): AlignmentState {
     return this.state;
   }
@@ -87,7 +111,7 @@ export class LinkCheckController {
   /** The beacon this device must currently display. */
   currentBeaconFrame(): string {
     return encodeFrame({
-      type: 'CAL_BEACON',
+      type: "CAL_BEACON",
       sessionId: CALIBRATION_SESSION_ID,
       sequence: 0,
       payload: jsonPayload(localBeacon(this.state, this.local)),
@@ -95,14 +119,30 @@ export class LinkCheckController {
   }
 
   emitView(): void {
-    const rate = this.firstDecodeAt === null ? 0 : decodeRatePerSecond(this.scanner?.stats() ?? { framesExamined: 0, decodeAttempts: 0, decoded: 0, distinct: 0, lastDecodeAt: null }, performance.now(), this.firstDecodeAt);
+    const rate =
+      this.firstDecodeAt === null
+        ? 0
+        : decodeRatePerSecond(
+            this.scanner?.stats() ?? {
+              framesExamined: 0,
+              decodeAttempts: 0,
+              decoded: 0,
+              distinct: 0,
+              lastDecodeAt: null,
+            },
+            performance.now(),
+            this.firstDecodeAt,
+          );
     this.callbacks.onView({
-      phase: this.state.phase === 'link-up' ? 'Link up (both directions)' : 'Aligning cameras',
+      phase:
+        this.state.phase === "link-up"
+          ? "Link up (both directions)"
+          : "Aligning cameras",
       localNonce: this.state.nonce,
       peerNonce: this.state.peerNonce,
       iSeePeer: this.state.peerSeen,
       peerSeesMe: this.state.peerSeesUs,
-      linkUp: this.state.phase === 'link-up',
+      linkUp: this.state.phase === "link-up",
       calId: this.state.calId,
       leader: this.state.leader,
       peerAppVersion: this.state.peerInfo?.appVersion ?? null,
@@ -111,29 +151,42 @@ export class LinkCheckController {
       quality: qualityLabel(rate),
       cameraError: this.cameraError,
       hint: this.hintFor(),
-      canCalibrate: this.state.phase === 'link-up' && this.state.calId !== null && this.calibration === null,
-      calibration: this.calibration?.currentPhase ?? 'idle',
+      canCalibrate:
+        this.state.phase === "link-up" &&
+        this.state.calId !== null &&
+        this.calibration === null,
+      calibration: this.calibration?.currentPhase ?? "idle",
       calibrationMessage: this.calibrationMessage,
       profile: this.profile,
       diagnostics: this.calibration?.diagnostics ?? null,
       frameEcl: this.displayEcl(),
+      cameraFacing: this.camera?.facing ?? null,
     });
   }
 
   private hintFor(): string {
     if (this.cameraError) return this.cameraError;
-    if (!cameraSupport().secure) return 'Camera needs a secure context: use the installed PWA or a localhost origin.';
-    if (this.state.phase === 'link-up') return 'Both screens are visible to each other. Calibration can start.';
-    if (!this.state.peerSeen) return 'Point this camera at the other screen. If nothing appears, lower the glare, raise the other screen brightness, or adjust the lid angle.';
-    if (!this.state.peerSeesUs) return 'This device sees the peer, but the peer does not see this screen yet. Angle the other camera toward this display.';
-    return 'Re-establishing the link.';
+    if (!cameraSupport().secure)
+      return "Camera needs a secure context: use the installed PWA or a localhost origin.";
+    if (this.state.phase === "link-up")
+      return "Both screens are visible to each other. Calibration can start.";
+    if (!this.state.peerSeen)
+      return "Point this camera at the other screen. If nothing appears, lower the glare, raise the other screen brightness, or adjust the lid angle.";
+    if (!this.state.peerSeesUs)
+      return "This device sees the peer, but the peer does not see this screen yet. Angle the other camera toward this display.";
+    return "Re-establishing the link.";
   }
 
-  async start(video?: HTMLVideoElement, facingMode: Facing = 'environment'): Promise<void> {
+  async start(
+    video?: HTMLVideoElement,
+    facingMode: Facing = "environment",
+  ): Promise<void> {
     this.stopped = false;
     this.wakeLock = await acquireWakeLock();
     try {
-      this.camera = await startCamera(video ? { video, facingMode } : { facingMode });
+      this.camera = await startCamera(
+        video ? { video, facingMode } : { facingMode },
+      );
       this.cameraError = null;
     } catch (error) {
       this.cameraError = (error as CameraError).message;
@@ -147,7 +200,11 @@ export class LinkCheckController {
     this.emitView();
   }
 
-  async switchCamera(deviceId: string | undefined, video?: HTMLVideoElement, facingMode?: Facing): Promise<void> {
+  async switchCamera(
+    deviceId: string | undefined,
+    video?: HTMLVideoElement,
+    facingMode?: Facing,
+  ): Promise<void> {
     this.stopDevices();
     const options = {
       ...(deviceId ? { deviceId } : {}),
@@ -168,18 +225,19 @@ export class LinkCheckController {
    */
   startCalibration(nowMs: number = performance.now()): void {
     if (this.calibration !== null) return;
-    if (this.state.phase !== 'link-up' || this.state.calId === null) {
-      this.calibrationMessage = 'Link-up is required before calibration';
+    if (this.state.phase !== "link-up" || this.state.calId === null) {
+      this.calibrationMessage = "Link-up is required before calibration";
       this.emitView();
       return;
     }
     const runner = new CalibrationRunner({
-      role: this.state.leader ? 'leader' : 'follower',
+      role: this.state.leader ? "leader" : "follower",
       calId: this.state.calId,
     });
     this.calibration = runner;
     this.profile = null;
-    this.calibrationMessage = 'Calibration started as ' + (this.state.leader ? 'leader' : 'follower');
+    this.calibrationMessage =
+      "Calibration started as " + (this.state.leader ? "leader" : "follower");
     runner.start(nowMs);
     this.calibrationTimer = setInterval(() => this.calibrationTick(), 250);
     this.emitView();
@@ -192,12 +250,15 @@ export class LinkCheckController {
     runner.tick(now);
     for (const event of runner.drainEvents()) {
       this.calibrationMessage = event.message;
-      this.emit('calibration', event.message);
+      this.emit("calibration", event.message);
     }
-    if (runner.currentPhase === 'done') {
+    if (runner.currentPhase === "done") {
       this.profile = runner.result;
-      this.calibrationMessage = 'Calibration complete: ' + (runner.result?.chunkSize ?? 0) + ' bytes per frame';
-      this.emit('calibration', this.calibrationMessage);
+      this.calibrationMessage =
+        "Calibration complete: " +
+        (runner.result?.chunkSize ?? 0) +
+        " bytes per frame";
+      this.emit("calibration", this.calibrationMessage);
       this.stopCalibrationTimer();
     }
     this.emitView();
@@ -216,18 +277,19 @@ export class LinkCheckController {
    * drawn at the level the runner reports, or the probe's own `ecl` field
    * contradicts what the camera actually sees.
    */
-  displayEcl(): 'L' | 'M' | 'Q' | 'H' {
+  displayEcl(): "L" | "M" | "Q" | "H" {
     if (this.calibration !== null && this.calibration.currentFrame() !== null) {
       return this.calibration.eclLevel;
     }
-    return 'Q';
+    return "Q";
   }
 
   displayFrameText(): string {
     if (this.calibration !== null) {
       const frame = this.calibration.currentFrame();
       if (frame !== null) return frame;
-      if (this.calibration.currentPhase === 'done') return this.currentBeaconFrame();
+      if (this.calibration.currentPhase === "done")
+        return this.currentBeaconFrame();
     }
     return this.currentBeaconFrame();
   }
@@ -241,7 +303,7 @@ export class LinkCheckController {
       return;
     }
     // Any calibration frame belongs to the runner, never to the beacon logic.
-    if (frame.type !== 'CAL_BEACON') {
+    if (frame.type !== "CAL_BEACON") {
       if (frame.sessionId !== CALIBRATION_SESSION_ID) return;
       this.calibrationSeq++;
       this.calibration?.onFrame(frame, performance.now());
@@ -285,8 +347,15 @@ export function linkCheckLocal(): LinkCheckLocal {
     appVersion: APP_VERSION,
     buildId: BUILD_ID,
     protocolVersions: [...SUPPORTED_PROTOCOL_VERSIONS],
-    capabilities: ['reliable', 'text'],
+    capabilities: ["reliable", "text"],
   };
 }
 
-export { listCameras, cameraSupport, CameraError, FrameError, drawQrToCanvas, encodeQr };
+export {
+  listCameras,
+  cameraSupport,
+  CameraError,
+  FrameError,
+  drawQrToCanvas,
+  encodeQr,
+};
