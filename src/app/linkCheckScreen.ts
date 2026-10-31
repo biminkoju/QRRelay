@@ -9,6 +9,7 @@ import {
   type LinkCheckView,
 } from "./linkCheck";
 import { CameraError } from "../camera/cameraManager";
+import { createTransferPanel } from './transferPanel';
 import { runLoopback } from "../sim/loopback";
 import { DEFAULT_CHANNEL } from "../sim/channel";
 
@@ -136,7 +137,27 @@ export function renderLinkCheckScreen(
   const diagSummary = el("p", "mono small", "No calibration run yet.");
   diagSection.append(diagTable, diagSummary);
 
+  // Declared before the panel because the panel reads them while mounting.
+  let controller: LinkCheckController | null = null;
+  let facing: "environment" | "user" = "environment";
+  let transferFrame: string | null = null;
+  let currentChunkSize: number | null = null;
+
   sheet.append(diagSection);
+
+  // The transfer panel shares the beacon canvas: while a file transfer
+  // is active its frames are what the other machine needs to see.
+  const transferPanel = createTransferPanel({
+    chunkSize: () => currentChunkSize,
+    onFrame: (text) => {
+      transferFrame = text;
+      // Redraw immediately: the peer is waiting on this frame.
+      const shown = text ?? controller?.displayFrameText() ?? '';
+      drawBeacon(shown, controller?.displayEcl() ?? 'Q');
+    },
+  });
+  sheet.append(transferPanel.element);
+
   container.append(sheet);
 
   const support = cameraSupport();
@@ -148,8 +169,6 @@ export function renderLinkCheckScreen(
       "This browser does not expose getUserMedia, so scanning is unavailable here.";
   }
 
-  let controller: LinkCheckController | null = null;
-  let facing: "environment" | "user" = "environment";
   let lastBeacon: string | null = null;
 
   /**
@@ -286,8 +305,11 @@ export function renderLinkCheckScreen(
         ? view.profile.rttMs.toFixed(0) + " ms"
         : "not measured",
     );
+    currentChunkSize = view.profile ? view.profile.chunkSize : null;
+    transferPanel.refresh();
     calibrateBtn.disabled = !view.canCalibrate;
-    drawBeacon(controller?.displayFrameText() ?? "", view.frameEcl);
+    const shown = transferFrame ?? controller?.displayFrameText() ?? "";
+    drawBeacon(shown, view.frameEcl);
     deviceSelect.disabled = !controller;
     renderDiagnostics(view);
   }
@@ -351,6 +373,7 @@ export function renderLinkCheckScreen(
     startBtn.disabled = true;
     controller = new LinkCheckController(linkCheckLocal(), {
       onView: (view) => applyView(view),
+      onPeerFrame: (frame) => transferPanel.onPeerFrame(frame),
     });
     try {
       await controller.start(preview, facing);
@@ -462,6 +485,7 @@ export function renderLinkCheckScreen(
   });
 
   return () => {
+    transferPanel.destroy();
     void stop();
   };
 }

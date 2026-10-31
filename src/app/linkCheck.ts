@@ -5,7 +5,7 @@ import {
   localBeacon,
   type AlignmentState,
 } from "../protocol/alignment";
-import { decodeFrame, encodeFrame, FrameError } from "../protocol/frame";
+import { decodeFrame, encodeFrame, FrameError, type ValidatedFrame } from "../protocol/frame";
 import { jsonPayload } from "../protocol/sender";
 import { validateBeacon } from "../protocol/messageTypes";
 import {
@@ -67,6 +67,11 @@ export interface LinkCheckView {
 }
 
 export interface LinkCheckCallbacks {
+  /**
+   * Every frame that is not a calibration beacon, so file transfer can
+   * claim it. Returning true means the frame was consumed.
+   */
+  onPeerFrame?(frame: ValidatedFrame): boolean;
   onView(view: LinkCheckView): void;
 }
 
@@ -303,6 +308,8 @@ export class LinkCheckController {
       return;
     }
     // Any calibration frame belongs to the runner, never to the beacon logic.
+    if (frame.type !== "CAL_BEACON" && this.callbacks.onPeerFrame?.(frame))
+      return;
     if (frame.type !== "CAL_BEACON") {
       if (frame.sessionId !== CALIBRATION_SESSION_ID) return;
       this.calibrationSeq++;
