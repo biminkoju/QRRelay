@@ -1,6 +1,7 @@
 import { APP_VERSION, BUILD_ID, BUILD_KIND, SUPPORTED_PROTOCOL_VERSIONS } from './version';
 import { button, el, field } from './app/dom';
 import { renderLinkCheckScreen } from './app/linkCheckScreen';
+import { IndexedDbReceiverStorage } from './transfer/indexedDbStorage';
 
 /**
  * Phase 0-3 shell.
@@ -102,5 +103,10 @@ async function checkOfflineReady(): Promise<void> {
     setStatus('Offline ready unavailable: service worker registration failed (' + (error as Error).message + ').', 'unavailable');
   }
 }
+
+// Diagnostics hook. The durable storage class can only be exercised in a real
+// browser, and the built bundle exposes no module paths, so tests reach it
+// here. Nothing in the app reads this; it exists for the browser suite.
+(globalThis as unknown as { __qrrelay?: unknown }).__qrrelay = { IndexedDbReceiverStorage };
 
 void checkOfflineReady();

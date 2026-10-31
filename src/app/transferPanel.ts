@@ -126,6 +126,11 @@ export function createTransferPanel(options: TransferPanelOptions): TransferPane
     });
   }
 
+  saveLink.addEventListener('click', () => {
+    // The file is now on disk, so the receiver no longer needs its copy.
+    void controller.clearDurable();
+  });
+
   function destroy(): void {
     controller.reset();
     if (saveUrl) URL.revokeObjectURL(saveUrl);

@@ -58,6 +58,7 @@ export class TransferController {
   private sessionId: string | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private view: TransferUiView = { ...EMPTY_VIEW };
+  private durable: IndexedDbReceiverStorage | null = null;
 
   constructor(options: TransferUiOptions) {
     this.options = options;
@@ -199,6 +200,10 @@ export class TransferController {
     const storage = IndexedDbReceiverStorage.isSupported()
       ? new IndexedDbReceiverStorage(shared)
       : undefined;
+    this.durable = storage ?? null;
+    // Pull in anything already stored for this session so a reload can
+    // resume instead of starting from zero.
+    if (storage) void storage.load().then(() => this.drain());
     this.session = new TransferSession({
       role: 'receiver',
       ...(storage ? { storage } : {}),
@@ -219,9 +224,15 @@ export class TransferController {
     this.drain();
   }
 
+  /** Removes durable chunks once the user has saved the file. */
+  async clearDurable(): Promise<void> {
+    if (this.durable) await this.durable.clear();
+  }
+
   reset(): void {
     this.stopTimer();
     this.session = null;
+    this.durable = null;
     this.view = { ...EMPTY_VIEW };
     this.options.onFrame(null);
     this.options.onChange({ ...this.view });
