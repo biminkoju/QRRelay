@@ -2,7 +2,7 @@ import { Receiver, type ReceiverEvent } from '../protocol/receiver';
 import { Sender, type SenderEvent } from '../protocol/sender';
 import { encodeFrame, type Frame, type ValidatedFrame } from '../protocol/frame';
 import { DEFAULT_CONFIG, type ReliableConfig } from '../protocol/constants';
-import { InMemoryReceiverStorage } from './receiverStorage';
+import { InMemoryReceiverStorage, type ReceiverStorage } from './receiverStorage';
 import { sha256Hex } from './hash';
 import type { TransferSource } from './source';
 
@@ -35,6 +35,12 @@ export interface TransferOptions {
   source?: TransferSource;
   /** Receiver only; called before accepting a file. Defaults to accept. */
   approve?: (meta: { name: string; size: number }) => boolean;
+  /**
+   * Receiver only. Defaults to in-memory storage, which is fine for tests
+   * but loses data on reload and cannot hold large files. The browser
+   * passes IndexedDB instead.
+   */
+  storage?: ReceiverStorage;
 }
 
 export interface TransferResult {
@@ -51,7 +57,7 @@ export class TransferSession {
   private readonly config: ReliableConfig;
   private readonly sender: Sender | null;
   private readonly receiver: Receiver | null;
-  private readonly storage: InMemoryReceiverStorage | null;
+  private readonly storage: ReceiverStorage | null;
   private phase: TransferPhase = 'idle';
   private frameText: string | null = null;
   private events: TransferEvent[] = [];
@@ -78,7 +84,7 @@ export class TransferSession {
       this.storage = null;
     } else {
       this.sender = null;
-      this.storage = new InMemoryReceiverStorage();
+      this.storage = options.storage ?? new InMemoryReceiverStorage();
       this.receiver = new Receiver({
         sessionId: options.sessionId,
         config: this.config,

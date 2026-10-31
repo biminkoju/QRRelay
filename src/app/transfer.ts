@@ -1,5 +1,6 @@
 import { TransferSession, type TransferEvent, type TransferResult } from '../transfer/session';
 import { sourceFromBytes } from '../transfer/source';
+import { IndexedDbReceiverStorage } from '../transfer/indexedDbStorage';
 import { sha256Hex } from '../transfer/hash';
 import type { ValidatedFrame } from '../protocol/frame';
 import { APP_VERSION, BUILD_ID, SUPPORTED_PROTOCOL_VERSIONS } from '../version';
@@ -192,8 +193,15 @@ export class TransferController {
       receivedSha256: null,
       outcome: null,
     };
+    // Durable storage keeps chunks across a reload and lets the browser page
+    // them to disk. In-memory remains the fallback for contexts without
+    // IndexedDB, where the transfer is still correct but not durable.
+    const storage = IndexedDbReceiverStorage.isSupported()
+      ? new IndexedDbReceiverStorage(shared)
+      : undefined;
     this.session = new TransferSession({
       role: 'receiver',
+      ...(storage ? { storage } : {}),
       sessionId: this.sessionId,
       config: this.config(),
       local: this.local(),
