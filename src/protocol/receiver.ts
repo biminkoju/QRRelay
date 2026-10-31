@@ -67,6 +67,11 @@ export class Receiver {
     return this.totalChunks;
   }
 
+  /** File name from the accepted META, or null before META arrives. */
+  get receivedName(): string | null {
+    return this.meta ? this.meta.name : null;
+  }
+
   get finalStatus(): 'verified' | 'verified-unconfirmed' | 'failed' | null {
     return this.verification;
   }
