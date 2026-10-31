@@ -1,7 +1,7 @@
 import { TransferSession, type TransferEvent, type TransferResult } from '../transfer/session';
 import { sourceFromBytes } from '../transfer/source';
 import { IndexedDbReceiverStorage } from '../transfer/indexedDbStorage';
-import { sha256Hex } from '../transfer/hash';
+import { sha256HexChunked } from '../transfer/sha256';
 import type { ValidatedFrame } from '../protocol/frame';
 import { APP_VERSION, BUILD_ID, SUPPORTED_PROTOCOL_VERSIONS } from '../version';
 import { DEFAULT_CONFIG } from '../protocol/constants';
@@ -154,7 +154,13 @@ export class TransferController {
   async send(file: File): Promise<void> {
     if (this.active) return;
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const sha = await sha256Hex(bytes);
+    // Chunked so a large file does not freeze the tab while it is hashed.
+    const sha = await sha256HexChunked(bytes, {
+      onProgress: (fraction) => {
+        this.view.message = 'Hashing ' + Math.round(fraction * 100) + '%';
+        this.options.onChange({ ...this.view });
+      },
+    });
     const shared = this.requireSessionId();
     this.sessionId = shared;
     this.view = {
