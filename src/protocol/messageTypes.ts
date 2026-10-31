@@ -12,6 +12,7 @@ export const MESSAGE_TYPES = [
   'CAL_RATE_RESULT',
   'CAL_PING',
   'CAL_PONG',
+  'CAL_AGREE',
   'HELLO',
   'READY',
   'META',
@@ -207,6 +208,7 @@ export type JsonPayload =
   | CalRateResultPayload
   | CalPingPayload
   | CalPongPayload
+  | CalAgreePayload
   | HelloPayload
   | ReadyPayload
   | MetaPayload
@@ -441,6 +443,25 @@ export function validateCalPong(value: unknown): CalPongPayload {
   };
 }
 
+/**
+ * Chunk-size agreement. Both sides send their calibrated chunk size and
+ * both take the minimum, so neither needs a leader and the result is
+ * symmetric by construction. Without this the two machines can end up
+ * with different chunk sizes and produce frames the peer cannot parse.
+ */
+export interface CalAgreePayload {
+  chunkSize: number;
+  ecl: CalibrationEcc;
+}
+
+export function validateCalAgree(value: unknown): CalAgreePayload {
+  if (!isRecord(value)) fail('CAL_AGREE payload must be an object');
+  return {
+    chunkSize: integer(value.chunkSize, 'chunkSize', 1, 4096),
+    ecl: calibrationEcc(value.ecl),
+  };
+}
+
 export function decodeJsonPayload(type: MessageType, bytes: Uint8Array): JsonPayload {
   if (bytes.length > 4096) fail('JSON payload exceeds 4096 bytes');
   // META_ACCEPT and FIN are bare control frames with no payload body.
@@ -466,6 +487,8 @@ export function decodeJsonPayload(type: MessageType, bytes: Uint8Array): JsonPay
       return validateCalRateResult(parsed);
     case 'CAL_PING':
       return validateCalPing(parsed);
+    case 'CAL_AGREE':
+      return validateCalAgree(parsed);
     case 'CAL_PONG':
       return validateCalPong(parsed);
     case 'HELLO':

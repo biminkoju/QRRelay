@@ -10,6 +10,11 @@ import {
 } from "./linkCheck";
 import { CameraError } from "../camera/cameraManager";
 import { createTransferPanel } from './transferPanel';
+import { agree, type AgreementOffer } from '../protocol/agreement';
+import { encodeFrame, type ValidatedFrame } from '../protocol/frame';
+import { jsonPayload } from '../protocol/sender';
+import { validateCalAgree } from '../protocol/messageTypes';
+import { CALIBRATION_SESSION_ID } from '../protocol/alignment';
 import { runLoopback } from "../sim/loopback";
 import { DEFAULT_CHANNEL } from "../sim/channel";
 
@@ -142,13 +147,19 @@ export function renderLinkCheckScreen(
   let facing: "environment" | "user" = "environment";
   let transferFrame: string | null = null;
   let currentChunkSize: number | null = null;
+  /** Agreed with the peer; what transfer actually uses. */
+  let transferChunkSize: number | null = null;
+  let agreementSent = false;
+  let agreeFrame: string | null = null;
+  let agreeTimer: ReturnType<typeof setInterval> | null = null;
+  let lastEcl: "L" | "M" | "Q" | "H" = "Q";
 
   sheet.append(diagSection);
 
   // The transfer panel shares the beacon canvas: while a file transfer
   // is active its frames are what the other machine needs to see.
   const transferPanel = createTransferPanel({
-    chunkSize: () => currentChunkSize,
+    chunkSize: () => transferChunkSize,
     onFrame: (text) => {
       transferFrame = text;
       // Redraw immediately: the peer is waiting on this frame.
@@ -256,6 +267,51 @@ export function renderLinkCheckScreen(
       diag.timeouts;
   }
 
+  /**
+   * Chunk-size agreement.
+   *
+   * Both machines calibrate independently and can disagree. Each keeps
+   * re-displaying its own offer until the peer’s arrives, then both adopt
+   * the smaller size. Min is symmetric, so no leader is needed and neither
+   * side uses a size it has not itself proven it can read.
+   */
+  function handleAgreeFrame(frame: ValidatedFrame): void {
+    let offer: AgreementOffer;
+    try {
+      offer = validateCalAgree(frame.json);
+    } catch {
+      return;
+    }
+    if (currentChunkSize === null) return;
+    const result = agree(
+      { chunkSize: currentChunkSize, ecl: lastEcl },
+      offer,
+    );
+    transferChunkSize = result.chunkSize;
+    // We have what we need; stop occupying the display so the transfer
+    // panel can show its own frames.
+    agreeFrame = null;
+    if (agreeTimer !== null) clearInterval(agreeTimer);
+    agreeTimer = null;
+    transferPanel.refresh();
+    setText(hint, result.reason);
+  }
+
+  function offerAgree(): void {
+    if (currentChunkSize === null || controller === null) return;
+    const frame = encodeFrame({
+      type: "CAL_AGREE",
+      sessionId: CALIBRATION_SESSION_ID,
+      sequence: 0,
+      payload: jsonPayload({ chunkSize: currentChunkSize, ecl: lastEcl }),
+    });
+    agreeFrame = frame;
+    agreeTimer ??= setInterval(() => {
+      if (agreeFrame === null) return;
+      drawBeacon(agreeFrame, lastEcl);
+    }, 1500);
+  }
+
   function applyView(view: LinkCheckView): void {
     setText(status, view.phase);
     status.dataset.kind = view.linkUp ? "ready" : "pending";
@@ -306,10 +362,23 @@ export function renderLinkCheckScreen(
         : "not measured",
     );
     currentChunkSize = view.profile ? view.profile.chunkSize : null;
+    if (view.profile) lastEcl = view.profile.ecl;
+    if (currentChunkSize !== null && !agreementSent) {
+      agreementSent = true;
+      offerAgree();
+    }
     transferPanel.refresh();
     calibrateBtn.disabled = !view.canCalibrate;
-    const shown = transferFrame ?? controller?.displayFrameText() ?? "";
-    drawBeacon(shown, view.frameEcl);
+    // Priority: an active transfer frame, then an outstanding agreement
+    // offer, then calibration/beacon. Without the agreement step the peer
+    // would never see our offer because the view loop redraws over it.
+    if (transferFrame !== null) {
+      drawBeacon(transferFrame, view.frameEcl);
+    } else if (agreeFrame !== null) {
+      drawBeacon(agreeFrame, lastEcl);
+    } else {
+      drawBeacon(controller?.displayFrameText() ?? "", view.frameEcl);
+    }
     deviceSelect.disabled = !controller;
     renderDiagnostics(view);
   }
@@ -373,7 +442,13 @@ export function renderLinkCheckScreen(
     startBtn.disabled = true;
     controller = new LinkCheckController(linkCheckLocal(), {
       onView: (view) => applyView(view),
-      onPeerFrame: (frame) => transferPanel.onPeerFrame(frame),
+      onPeerFrame: (frame) => {
+        if (frame.type === "CAL_AGREE") {
+          handleAgreeFrame(frame);
+          return true;
+        }
+        return transferPanel.onPeerFrame(frame);
+      },
     });
     try {
       await controller.start(preview, facing);
@@ -485,6 +560,8 @@ export function renderLinkCheckScreen(
   });
 
   return () => {
+    if (agreeTimer !== null) clearInterval(agreeTimer);
+    agreeTimer = null;
     transferPanel.destroy();
     void stop();
   };
