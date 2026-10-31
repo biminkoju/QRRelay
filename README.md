@@ -28,7 +28,8 @@ Implemented:
 - Calibration: directional probe ladder, rate burst, ping/pong round trip, and
   a conservative LinkProfile that only trusts what was observed in both
   directions.
-- 127 unit and simulation tests, plus 8 Playwright browser tests.
+- Single-machine simulation: run a full calibration with no camera and no peer from the Link Check screen via **Simulate (no camera)**. It uses a simulated optical channel and the real calibration code.
+- 145 unit and simulation tests, plus 8 Playwright browser tests.
 
 Not implemented:
 

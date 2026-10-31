@@ -9,6 +9,8 @@ import {
   type LinkCheckView,
 } from './linkCheck';
 import { CameraError } from '../camera/cameraManager';
+import { runLoopback } from '../sim/loopback';
+import { DEFAULT_CHANNEL } from '../sim/channel';
 
 /** Link Check screen: live beacon QR, camera preview, bidirectional state. */
 export function renderLinkCheckScreen(container: HTMLElement, onBack: () => void): () => void {
@@ -45,11 +47,12 @@ export function renderLinkCheckScreen(container: HTMLElement, onBack: () => void
   const stopBtn = button('Stop', () => void stop(), 'btn btn-secondary');
   stopBtn.disabled = true;
   const calibrateBtn = button('Run calibration', () => void calibrate(), 'btn btn-secondary');
+  const simulateBtn = button('Simulate (no camera)', () => simulate(), 'btn btn-secondary');
   calibrateBtn.disabled = true;
   const deviceSelect = el('select', 'select');
   deviceSelect.setAttribute('aria-label', 'Camera device');
   deviceSelect.disabled = true;
-  controls.append(startBtn, calibrateBtn, stopBtn, deviceSelect);
+  controls.append(startBtn, simulateBtn, calibrateBtn, stopBtn, deviceSelect);
 
   const details = el('dl', 'details');
   const iSeePeer = field('I can see the peer', 'no');
@@ -212,6 +215,53 @@ export function renderLinkCheckScreen(container: HTMLElement, onBack: () => void
       status.dataset.kind = 'unavailable';
       hint.textContent = message;
       startBtn.disabled = false;
+    }
+  }
+
+  /**
+   * Runs a full calibration exchange through the simulated optical channel.
+   * Needs no camera and no peer, so it works on a single machine. The
+   * numbers are a model, not a measurement, but the wiring is the real one.
+   */
+  function simulate(): void {
+    simulateBtn.disabled = true;
+    status.textContent = 'Simulating calibration...';
+    status.dataset.kind = 'pending';
+    try {
+      const result = runLoopback({
+        channel: { ...DEFAULT_CHANNEL, modulePx: 8, captureWidth: 2400 },
+        calId: 'simulated-calibration-id-000000',
+        ecl: 'M',
+      });
+      const profile = result.leaderProfile;
+      diagBody.replaceChildren();
+      for (const row of [...result.leader.ladder].reverse()) {
+        const tr = el('tr');
+        tr.append(el('td', undefined, String(row.bytes)));
+        tr.append(el('td', row.forward === null ? 'no answer' : row.forward ? 'ok' : 'failed'));
+        tr.append(el('td', row.reverse === null ? 'no answer' : row.reverse ? 'ok' : 'failed'));
+        diagBody.append(tr);
+      }
+      const rtts = result.leader.rttSamples.length > 0
+        ? result.leader.rttSamples.map((r) => r.toFixed(0)).join(', ') + ' ms'
+        : 'none';
+      diagSummary.textContent =
+        'SIMULATED | completed ' + (result.completed ? 'yes' : 'no') +
+        ' | dropped ' + result.dropped +
+        ' | confirmed forward ' + result.leader.forwardConfirmedBytes + ' B' +
+        ', reverse ' + result.leader.reverseConfirmedBytes + ' B' +
+        ' | RTT ' + rtts +
+        (profile ? ' | chunk ' + profile.chunkSize + ' B' : '');
+      status.textContent = profile
+        ? 'Simulated calibration: ' + profile.chunkSize + ' bytes per frame'
+        : 'Simulated calibration produced no profile';
+      status.dataset.kind = profile ? 'ready' : 'unavailable';
+      setText(hint, 'Simulated run only. Real hardware will differ; use the camera path for real numbers.');
+    } catch (error) {
+      status.textContent = 'Simulation failed: ' + (error as Error).message;
+      status.dataset.kind = 'unavailable';
+    } finally {
+      simulateBtn.disabled = false;
     }
   }
 

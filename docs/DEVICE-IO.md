@@ -99,6 +99,27 @@ sides, then the table after calibration. A `failed` rung with `ok` rungs above
 it means the symbol was too dense at that size; a `no answer` means the peer
 never scanned it at all.
 
+## Simulating a link on one machine
+
+The Link Check screen has a **Simulate (no camera)** button. It runs a full
+calibration exchange between two real `CalibrationRunner` instances through a
+simulated optical channel, with no camera and no peer:
+
+- `src/sim/channel.ts` encodes, renders, downscales to a capture resolution,
+  blurs, applies brightness, compresses contrast and adds seeded noise, then
+  runs the same jsQR decoder the real scanner uses.
+- `src/sim/loopback.ts` drives both runners in virtual time, so a run that would
+  take a minute on hardware finishes in about a second.
+- `sweepModuleSize()` reports how small a module can get before a given payload
+  stops decoding.
+
+Contrast is a separate term from brightness on purpose: a plain multiplier
+scales black and white equally and therefore preserves their separation, so it
+cannot model glare washout. `contrast` pulls both ends toward mid-grey.
+
+This is a model, not a measurement. It tells you the shape of the cliff and
+whether the wiring is sound. It cannot tell you your webcam's real limits.
+
 ## What is still missing
 
 - Choosing the EC level by measurement: the ladder always runs at `M`.
