@@ -120,6 +120,20 @@ cannot model glare washout. `contrast` pulls both ends toward mid-grey.
 This is a model, not a measurement. It tells you the shape of the cliff and
 whether the wiring is sound. It cannot tell you your webcam's real limits.
 
+Two honest caveats about the simulated numbers:
+
+- The channel is configured clean (`modulePx: 8`, `captureWidth: 2400`, no blur,
+  noise or contrast loss), so nothing fails and the ladder always reaches 1024 B.
+  The resulting chunk size is what you get when a link never errors; it is not a
+  prediction for hardware.
+- Round-trip time is reported as `n/a (virtual time)`. The loopback advances a
+  virtual clock in fixed steps, so its RTT is a property of the harness, not of
+  any link.
+
+A simulated run takes roughly 7-9 seconds because it renders and decodes twelve
+large QR symbols. The button defers the work by one frame so the pending status
+paints instead of the page appearing frozen.
+
 ## What is still missing
 
 - Choosing the EC level by measurement: the ladder always runs at `M`.

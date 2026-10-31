@@ -137,6 +137,17 @@ export function renderLinkCheckScreen(container: HTMLElement, onBack: () => void
     }
   }
 
+  /**
+   * A verdict cell. The value is text, not a class name: `el`'s second
+   * argument is className, and passing the verdict there produced empty cells
+   * that looked like a successful run while showing nothing.
+   */
+  function verdictCell(value: boolean | null): HTMLTableCellElement {
+    const label = value === null ? 'no answer' : value ? 'ok' : 'failed';
+    const cell = el('td', 'verdict-' + (value === null ? 'none' : value ? 'ok' : 'failed'), label);
+    return cell;
+  }
+
   function renderDiagnostics(view: LinkCheckView): void {
     const diag = view.diagnostics;
     diagBody.replaceChildren();
@@ -147,8 +158,8 @@ export function renderLinkCheckScreen(container: HTMLElement, onBack: () => void
     for (const row of [...diag.ladder].reverse()) {
       const tr = el('tr');
       tr.append(el('td', undefined, String(row.bytes)));
-      tr.append(el('td', row.forward === null ? 'no answer' : row.forward ? 'ok' : 'failed'));
-      tr.append(el('td', row.reverse === null ? 'no answer' : row.reverse ? 'ok' : 'failed'));
+      tr.append(verdictCell(row.forward));
+      tr.append(verdictCell(row.reverse));
       diagBody.append(tr);
     }
     const rtts = diag.rttSamples.length > 0 ? diag.rttSamples.map((r) => r.toFixed(0)).join(', ') + ' ms' : 'none';
@@ -227,6 +238,7 @@ export function renderLinkCheckScreen(container: HTMLElement, onBack: () => void
     simulateBtn.disabled = true;
     status.textContent = 'Simulating calibration...';
     status.dataset.kind = 'pending';
+    setTimeout(() => {
     try {
       const result = runLoopback({
         channel: { ...DEFAULT_CHANNEL, modulePx: 8, captureWidth: 2400 },
@@ -238,13 +250,14 @@ export function renderLinkCheckScreen(container: HTMLElement, onBack: () => void
       for (const row of [...result.leader.ladder].reverse()) {
         const tr = el('tr');
         tr.append(el('td', undefined, String(row.bytes)));
-        tr.append(el('td', row.forward === null ? 'no answer' : row.forward ? 'ok' : 'failed'));
-        tr.append(el('td', row.reverse === null ? 'no answer' : row.reverse ? 'ok' : 'failed'));
+        tr.append(verdictCell(row.forward));
+        tr.append(verdictCell(row.reverse));
         diagBody.append(tr);
       }
-      const rtts = result.leader.rttSamples.length > 0
-        ? result.leader.rttSamples.map((r) => r.toFixed(0)).join(', ') + ' ms'
-        : 'none';
+      // The loopback advances a virtual clock in fixed steps, so its RTT is a
+      // property of the harness, not of any link. Reporting it as milliseconds
+      // would be a number with no physical meaning.
+      const rtts = 'n/a (virtual time)';
       diagSummary.textContent =
         'SIMULATED | completed ' + (result.completed ? 'yes' : 'no') +
         ' | dropped ' + result.dropped +
@@ -263,6 +276,7 @@ export function renderLinkCheckScreen(container: HTMLElement, onBack: () => void
     } finally {
       simulateBtn.disabled = false;
     }
+    }, 30);
   }
 
   function calibrate(): void {

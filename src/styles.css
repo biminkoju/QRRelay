@@ -184,3 +184,8 @@ dd {
 .diag th {
   font-weight: 600;
 }
+
+/* Probe verdict cells: text plus a colour cue. */
+.verdict-ok { color: #157347; }
+.verdict-failed { color: #b02a37; }
+.verdict-none { opacity: 0.6; }

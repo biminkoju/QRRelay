@@ -23,7 +23,7 @@
 - Single-machine loopback: a full two-runner calibration over a clean channel (both directions confirm 1024 B, matching chunk sizes, RTT samples), determinism, an unreadable channel that drops frames and yields `bidirectional: false` with the 64 B floor, log directions, and `sweepModuleSize` (resolution cliff, larger payload -> more modules).
 - Scanner helpers: duplicate suppression, decode-rate calculation, quality labels.
 - Build: no-remote scan over both build outputs.
-- Browser (Playwright, 8 tests): PWA starts offline with zero external requests and zero CSP violations; service-worker precache contains the app shell; single-file build opens from `file:///` with hashed CSP intact; Link Check screen opens and reports the missing-camera limitation without pretending to work; and, for GitHub Pages, the same dist/ mounted at /qrrelay/ starts with no failed requests, serves manifest.json as JSON with 192/512 icons, precaches subpath URLs, and contains no root-absolute asset paths (.nojekyll included).
+- Browser (Playwright, 9 tests): PWA starts offline with zero external requests and zero CSP violations; service-worker precache contains the app shell; single-file build opens from `file:///` with hashed CSP intact; Link Check screen opens and reports the missing-camera limitation without pretending to work; and, for GitHub Pages, the same dist/ mounted at /qrrelay/ starts with no failed requests, serves manifest.json as JSON with 192/512 icons, precaches subpath URLs, and contains no root-absolute asset paths (.nojekyll included); and the Simulate button fills the measurements table with six populated rows, a chunk size and `RTT n/a (virtual time)` rather than blank cells.
 
 ### Not covered yet
 

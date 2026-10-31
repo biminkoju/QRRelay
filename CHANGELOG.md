@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Simulated calibration reports RTT as `n/a (virtual time)` rather than the harness step interval, and the Simulate button defers its work so the pending state paints. Added a browser test asserting the measurements table is populated, not blank.
+
 - Single-machine simulator: a simulated optical channel (`src/sim/channel.ts`) with area downscale, box blur, brightness, contrast and seeded noise; a virtual-time two-runner loopback (`src/sim/loopback.ts`) and `sweepModuleSize`; a contrast term so glare washout is modellable at all; and a **Simulate (no camera)** button on the Link Check screen that runs a full calibration without hardware. 14 new tests.
 
 - Calibration diagnostics: a raw measurements table on the Link Check screen (per-rung pass/fail per direction, confirmed bytes, burst frames, RTT samples, timeout count), a `diagnostics` getter on the runner, and an EC level that matches between the probe payload and the rendered symbol. QR display now sizes itself from the pane width instead of a fixed 520 px.
